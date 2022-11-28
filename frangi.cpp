@@ -3,36 +3,47 @@
 #include<iostream>
 #include<cmath>
 #include<fstream>
+#include<numbers>
+
 using namespace std;
 
-# define PI           3.14159265358979323846  /* pi */
 
-void frangi2d_hessian(const cv::Mat& src, cv::Mat& Dxx, cv::Mat& Dxy, cv::Mat& Dyy, float scale, bool gpu) {
+void frangi2d_hessian(const cv::Mat& src, cv::Mat& Dxx, cv::Mat& Dxy, cv::Mat& Dyy, float scale, bool device) {
 	//construct Hessian kernels
-	int n_kern_x = 2 * round(3 * scale) + 1;
+	int half_kernel = (int)ceil(3 * scale);
+	int n_kern_x = 2 * half_kernel + 1;
 	int n_kern_y = n_kern_x;
 	float* kern_xx_f = new float[n_kern_x * n_kern_y]();
 	float* kern_xy_f = new float[n_kern_x * n_kern_y]();
 	float* kern_yy_f = new float[n_kern_x * n_kern_y]();
 	int i = 0, j = 0;
-	for (int x = -round(3 * scale); x <= round(3 * scale); x++) {
+	float scale_2 = scale * scale;
+	float scale_4 = scale_2 * scale_2;
+	float scale_6 = scale_2 * scale_4;
+	float PI_2 = (float)M_PI * 2.0f;
+	float half_PI_scale_4 = 1.0f / (2.0f * PI_2 * scale_4);
+	float half_PI_scale_6 = 1.0f / (2.0f * PI_2 * scale_6);
+	float exp_x2{};
+	float x2{};
+	for (int x = -half_kernel; x <= half_kernel; x++) {
 		j = 0;
-		for (int y = -round(3 * scale); y <= round(3 * scale); y++) {
-			kern_xx_f[i * n_kern_y + j] = 1.0f / (2.0f * M_PI * scale * scale * scale * scale) * (x * x / (scale * scale) - 1) * exp(-(x * x + y * y) / (2.0f * scale * scale));
-			kern_xy_f[i * n_kern_y + j] = 1.0f / (2.0f * M_PI * scale * scale * scale * scale * scale * scale) * (x * y) * exp(-(x * x + y * y) / (2.0f * scale * scale));
+		x2 = x * x;
+		for (int y = -half_kernel; y <= half_kernel; y++) {
+			kern_xx_f[i * n_kern_y + j] = half_PI_scale_4 * (x2 / scale_2 - 1) * exp(-(x2 + y * y) / (2.0f * scale_2));
+			kern_xy_f[i * n_kern_y + j] = half_PI_scale_6 * (x * y) * exp(-(x2 + y * y) / (2.0f * scale_2));
 			j++;
 		}
 		i++;
 	}
 
-	//kern_yy_f is transpose(kern_xx_f)
+	// kern_yy_f is transpose(kern_xx_f)
 	for (int z = 0; z < n_kern_y; z++) {
 		for (int i = 0; i < n_kern_x; i++) {
 			kern_yy_f[z * n_kern_x + i] = kern_xx_f[i * n_kern_x + z];
 		}
 	}
 
-	//flip kernels since kernels aren't symmetric and opencv's filter2D operation performs a correlation, not a convolution
+	// flip kernels since kernels aren't symmetric and opencv's filter2D operation performs a correlation, not a convolution
 	cv::Mat kern_xx;
 	cv::flip(cv::Mat(n_kern_y, n_kern_x, CV_32FC1, kern_xx_f), kern_xx, -1);
 
@@ -44,43 +55,17 @@ void frangi2d_hessian(const cv::Mat& src, cv::Mat& Dxx, cv::Mat& Dxy, cv::Mat& D
 
 	//specify anchor since we are to perform a convolution, not a correlation
 	cv::Point anchor(n_kern_x - n_kern_x / 2 - 1, n_kern_y - n_kern_y / 2 - 1);
-	int width, height, size;
-	width = src.size().width;
-	height = src.size().height;
-	size = width * height;
-	int sigma = 5;
-	int k_size = 6 * sigma;  //calculate k
-	if (k_size % 2 == 0) k_size++; //make sure k is odd
-	float miu = k_size / 2;
 
-
-	// allocate output array for pixels after convolution along x axis
-	int height_x = height;
-	int width_x = (width - k_size) + 1;
-	int size_x = height_x * width_x * 3;
-	
-	std::cout << "Part 1 finished." << std::endl;
-	// allocate output array for pixels after convolution along y axis
-	int height_y = (height_x - k_size) + 1;
-	int width_y = width_x;
-	int size_y = height_y * width_y * 3;
-	
-	std::cout << "Part 2 finished." << std::endl;
-	// define a float pointer to the gaussian kernel
-	float* gKernel = (float*)malloc(k_size * sizeof(float));
-	for (int i = 0; i < k_size; i++) {
-		gKernel[i] = 1 / sqrt(2 * sigma * sigma * (float)PI) * exp(-(i - miu) * (i - miu) / (2 * sigma * sigma));
-		//return 0;
-	}
-
-	if (!gpu) {
-		//run image filter
+	if (!device) {
 		cv::filter2D(src, Dxx, -1, kern_xx, anchor);
 		cv::filter2D(src, Dxy, -1, kern_xy, anchor);
 		cv::filter2D(src, Dyy, -1, kern_yy, anchor);
 	}
-	else{}
-
+	else {
+		convolution_gpu(Dxx, src, kern_xx);
+		convolution_gpu(Dxy, src, kern_xy);
+		convolution_gpu(Dyy, src, kern_yy);
+	}
 	delete[] kern_xx_f;
 	delete[] kern_xy_f;
 	delete[] kern_yy_f;
@@ -123,7 +108,8 @@ void frangi2_eig2image(const cv::Mat& Dxx, const cv::Mat& Dxy, const cv::Mat& Dy
 }
 
 
-void frangi2d(const cv::Mat& src, cv::Mat& maxVals, cv::Mat& whatScale, cv::Mat& outAngles, float beta, float c, float start, float end, float step, bool black, bool gpu) {
+void frangi2d(const cv::Mat& src, cv::Mat& maxVals, cv::Mat& whatScale, cv::Mat& outAngles, float beta, float c, float start, float end,
+	float step, bool black, bool device) {
 	vector<cv::Mat> ALLfiltered;
 	vector<cv::Mat> ALLangles;
 
@@ -133,8 +119,7 @@ void frangi2d(const cv::Mat& src, cv::Mat& maxVals, cv::Mat& whatScale, cv::Mat&
 	for (float scale = start; scale <= end; scale += step) {
 		//create 2D hessians
 		cv::Mat Dxx, Dyy, Dxy;
-		frangi2d_hessian(src, Dxx, Dxy, Dyy, scale, gpu);
-
+		frangi2d_hessian(src, Dxx, Dxy, Dyy, scale, device);
 		//correct for scale
 		Dxx = Dxx * scale * scale;
 		Dyy = Dyy * scale * scale;
