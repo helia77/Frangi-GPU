@@ -8,7 +8,7 @@
 using namespace std;
 
 
-void frangi2d_hessian(const cv::Mat& src, cv::Mat& Dxx, cv::Mat& Dxy, cv::Mat& Dyy, float scale, bool device) {
+void frangi2d_hessian(const cv::Mat& src, cv::Mat& Dxx, cv::Mat& Dxy, cv::Mat& Dyy, float& scale, bool device) {
 	//construct Hessian kernels
 	int half_kernel = (int)ceil(3 * scale);
 	int n_kern_x = 2 * half_kernel + 1;
@@ -42,30 +42,37 @@ void frangi2d_hessian(const cv::Mat& src, cv::Mat& Dxx, cv::Mat& Dxy, cv::Mat& D
 			kern_yy_f[z * n_kern_x + i] = kern_xx_f[i * n_kern_x + z];
 		}
 	}
-
+	std::cout << "size of kern xxf: " << sizeof(kern_xx_f) << std::endl;
+	std::cout << "size of n kern x: " << sizeof(n_kern_x) << std::endl;
+	std::cout << "size of n kern y: " << sizeof(n_kern_y) << std::endl;
 	// flip kernels since kernels aren't symmetric and opencv's filter2D operation performs a correlation, not a convolution
 	cv::Mat kern_xx;
+	cv::Mat kern_xx_gpu = cv::Mat(n_kern_y, n_kern_x, CV_32FC1, kern_xx_f);
 	cv::flip(cv::Mat(n_kern_y, n_kern_x, CV_32FC1, kern_xx_f), kern_xx, -1);
 
 	cv::Mat kern_xy;
+	cv::Mat kern_xy_gpu = cv::Mat(n_kern_y, n_kern_x, CV_32FC1, kern_xy_f);
 	cv::flip(cv::Mat(n_kern_y, n_kern_x, CV_32FC1, kern_xy_f), kern_xy, -1);
 
 	cv::Mat kern_yy;
+	cv::Mat kern_yy_gpu = cv::Mat(n_kern_y, n_kern_x, CV_32FC1, kern_yy_f);
 	cv::flip(cv::Mat(n_kern_y, n_kern_x, CV_32FC1, kern_yy_f), kern_yy, -1);
 
 	//specify anchor since we are to perform a convolution, not a correlation
 	cv::Point anchor(n_kern_x - n_kern_x / 2 - 1, n_kern_y - n_kern_y / 2 - 1);
-
+	std::cout << "size of kern xx: " << kern_xx.size() << std::endl;
+	std::cout << "size of src: " << src.size() << std::endl;
 	if (!device) {
 		cv::filter2D(src, Dxx, -1, kern_xx, anchor);
 		cv::filter2D(src, Dxy, -1, kern_xy, anchor);
 		cv::filter2D(src, Dyy, -1, kern_yy, anchor);
 	}
 	else {
-		convolution_gpu(Dxx, src, kern_xx);
-		convolution_gpu(Dxy, src, kern_xy);
-		convolution_gpu(Dyy, src, kern_yy);
+		convolution_gpu(Dxx, src, kern_xx_gpu);
+		convolution_gpu(Dxy, src, kern_xy_gpu);
+		convolution_gpu(Dyy, src, kern_yy_gpu);
 	}
+	std::cout << "size of Dxx: " << Dxx.size() << std::endl;
 	delete[] kern_xx_f;
 	delete[] kern_xy_f;
 	delete[] kern_yy_f;
@@ -115,9 +122,10 @@ void frangi2d(const cv::Mat& src, cv::Mat& maxVals, cv::Mat& whatScale, cv::Mat&
 
 	beta = 2 * beta * beta;
 	c = 2 * c * c;
-
-	for (float scale = start; scale <= end; scale += step) {
+	int steps = (end - start) / step;
+	for (int i{}; i < steps; i++) {
 		//create 2D hessians
+		float scale = (i * steps + start);
 		cv::Mat Dxx, Dyy, Dxy;
 		frangi2d_hessian(src, Dxx, Dxy, Dyy, scale, device);
 		//correct for scale
@@ -156,17 +164,17 @@ void frangi2d(const cv::Mat& src, cv::Mat& maxVals, cv::Mat& whatScale, cv::Mat&
 		ALLfiltered.push_back(Ifiltered);
 	}
 
-	float scale = start;
+	float s = start;
 	ALLfiltered[0].copyTo(maxVals);
 	ALLfiltered[0].copyTo(whatScale);
 	ALLfiltered[0].copyTo(outAngles);
-	whatScale.setTo(scale);
+	whatScale.setTo(s);
 
 	//find element-wise maximum across all accumulated filter results
 	for (int i = 1; i < ALLfiltered.size(); i++) {
 		maxVals = max(maxVals, ALLfiltered[i]);
-		whatScale.setTo(scale, ALLfiltered[i] == maxVals);
+		whatScale.setTo(s, ALLfiltered[i] == maxVals);
 		ALLangles[i].copyTo(outAngles, ALLfiltered[i] == maxVals);
-		scale += step;
+		s += step;
 	}
 }

@@ -23,15 +23,15 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Header.cuh">
+    <ClInclude Include="frangi.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="frangi.h">
+    <ClInclude Include="frangi.cuh">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="File.cu">
+    <CudaCompile Include="frangi.cu">
       <Filter>Source Files</Filter>
     </CudaCompile>
   </ItemGroup>

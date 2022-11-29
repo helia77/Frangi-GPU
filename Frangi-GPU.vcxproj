@@ -137,11 +137,11 @@
     <ClCompile Include="frangi.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="frangi.cuh" />
     <ClInclude Include="frangi.h" />
-    <ClInclude Include="Header.cuh" />
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="File.cu" />
+    <CudaCompile Include="frangi.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
