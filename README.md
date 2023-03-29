@@ -8,8 +8,8 @@ GPU code is added for acceleration.
  
 <table>
   <tr>
-    <td>Sample input image:
-   <sub> beta=1, c=20, range=(1:0.5:3) <sub></td>
+    <td>Sample input image:   
+   <sub>beta=1, c=20, range=(1:0.5:3) <sub></td>
      <td>Output image:</td>
   </tr>
   <tr>
