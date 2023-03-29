@@ -10,7 +10,7 @@ IF(NOT TIRA_ROOT)
 ENDIF(NOT TIRA_ROOT)
 
     FIND_PATH(TIRA_INCLUDE_DIRS DOC "Path to TIRA include directory."
-              NAMES tira/image/image.h
+              NAMES tira/image.h
               PATHS ${TIRA_ROOT})
 
 find_package_handle_standard_args(TIRA DEFAULT_MSG TIRA_INCLUDE_DIRS)
