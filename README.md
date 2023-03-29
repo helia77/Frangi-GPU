@@ -5,10 +5,11 @@ This code is written based on the efforts of "[NTNU IET Biomedical Optics](http:
 
 GPU code is added for acceleration.
 
- parameters: beta=1, c=20, range= 1:0.5:3</p>
+ 
 <table>
   <tr>
-    <td>Sample input image:</td>
+    <td>Sample input image:
+   <sub>parameters: beta=1, c=20, range= (1:0.5:3)<sub></td>
      <td>Output image:</td>
   </tr>
   <tr>
