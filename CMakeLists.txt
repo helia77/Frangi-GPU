@@ -23,8 +23,8 @@ if ( MSVC )
 	add_definitions(-D_SCL_SECURE_NO_WARNINGS)
 endif ( MSVC )
 
-configure_file(brain.ppm 
-				brain.ppm COPYONLY)
+configure_file(brain.bmp 
+				brain.bmp COPYONLY)
 
 
 #set the include directories

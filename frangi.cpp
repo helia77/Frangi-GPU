@@ -1,9 +1,6 @@
 #define _USE_MATH_DEFINES
 #include<iostream>
 #include"tira/image.h"
-#include<cmath>
-#include<fstream>
-#include<numbers>
 #include<tira/image/colormap.h>
 
 # define PI 3.14159265358979323846  /* pi */
@@ -26,7 +23,6 @@ void make_HKernels(float* kern_xx_f, float* kern_xy_f, float* kern_yy_f, float s
 	float scale_6 = scale_2 * scale_4;
 	float half_PI_scale_4 = 1.0f / (2.0f * (float)PI * scale_4);
 	float half_PI_scale_6 = 1.0f / (2.0f * (float)PI * scale_6);
-	float exp_x2{};
 	float x2{};
 	for (int x = -half_kernel; x <= half_kernel; x++) {
 		j = 0;
@@ -47,8 +43,7 @@ void make_HKernels(float* kern_xx_f, float* kern_xy_f, float* kern_yy_f, float s
 
 }
 
-//Run 2D Hessian filter with parameter sigma on src, return 3 channel image, comprising Dxx, Dxy, Dyy.
-// Host version
+// Run 2D Hessian filter with parameter sigma on src, return 3 channel image, comprising Dxx, Dxy, Dyy.
 tira::image<float> frangi_hessian(tira::image<float> src, float scale) {
 	
 	int half_kernel = (int)ceil(3 * scale);
@@ -102,6 +97,7 @@ tira::image<float> frangi_hessian(tira::image<float> src, float scale) {
 
 	// save Dxx, Dxy, Dyy as channels in one image and output
 	tira::image<float> image_3(Dxx.width(), Dxx.height(), 3);
+	//std::cout << src.width() << " ?= " << Dxx.width() << ", " << src.height() << " ?= " << Dxx.height() << std::endl;
 	image_3.channel(Dxx.data(), 0);
 	image_3.channel(Dxy.data(), 1);
 	image_3.channel(Dyy.data(), 2);
@@ -128,7 +124,7 @@ tira::image<float> mult(tira::image<float> img, float n) {
 // Estimate eigenvalues from Dxx, Dxy, Dyy. Save results to lambda1, lambda2, Ix, Iy.
 tira::image<float> frangi_eig(tira::image<float> image_3) {
 
-	//2 stack of eigenvalues for each pixel
+	// 2 stack of eigenvalues for each pixel
 	tira::image<float> output(image_3.width(), image_3.height(), 2);
 
 	for (int x = 0; x < image_3.width(); x++) {
@@ -142,7 +138,7 @@ tira::image<float> frangi_eig(tira::image<float> image_3) {
 			float tmp = dxx - dyy;
 			float tmp2 = sqrt(tmp * tmp + (4 * dxy * dxy));
 
-			// compute eigenvalues (calculation in presentation)
+			// compute eigenvalues
 			float mu1 = 0.5 * (dxx + dyy + tmp2);
 			float mu2 = 0.5 * (dxx + dyy - tmp2);
 
@@ -159,7 +155,7 @@ tira::image<float> frangi_eig(tira::image<float> image_3) {
 	return output;
 }
 
-// Comute the first component of the vesselness equation (mentioned in presentation)
+// Comute the first component of the vesselness equation
 tira::image<float> term1(tira::image<float> eigs, float beta) {
 
 	tira::image<float> tmp1(eigs.width(), eigs.height());
@@ -177,7 +173,7 @@ tira::image<float> term1(tira::image<float> eigs, float beta) {
 
 	return tmp1;
 }
-
+// Comute the second component of the vesselness equation
 tira::image<float> term2(tira::image<float> eigs, float c) {
 
 	tira::image<float> tmp2(eigs.width(), eigs.height());
@@ -246,7 +242,7 @@ tira::image<float> frangi(tira::image<float> src, float B, float C, float start,
 		//correct for scale - D * scale * scale
 		D = mult(mult(D, scale), scale);
 
-		//calculate (abs sorted) eigenvalues and vectors
+		//calculate (absolute value sorted) eigenvalues and vectors
 		tira::image<float> eig_2 = frangi_eig(D);
 		
 		// Check lambda2 > 0 and if equal to zero, make the smallest floating point value possible
