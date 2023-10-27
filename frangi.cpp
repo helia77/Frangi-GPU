@@ -121,11 +121,10 @@ tira::image<float> mult(tira::image<float> img, float n) {
 	return out;
 }
 
-// Estimate eigenvalues from Dxx, Dxy, Dyy. Save results to lambda1, lambda2, Ix, Iy.
-tira::image<float> frangi_eig(tira::image<float> image_3) {
 
-	// 2 stack of eigenvalues for each pixel
-	tira::image<float> output(image_3.width(), image_3.height(), 2);
+tira::image<float> frangi_eig(tira::image<float> image_3, float beta, float c) {
+
+	tira::image<float> output(image_3.width(), image_3.height());
 
 	for (int x = 0; x < image_3.width(); x++) {
 		for (int y = 0; y < image_3.height(); y++) {
@@ -134,7 +133,7 @@ tira::image<float> frangi_eig(tira::image<float> image_3) {
 			float dxy = image_3(x, y, 1);
 			float dyy = image_3(x, y, 2);
 
-			// calculate eigenvectors
+			// calculate eigenvalues from Dxx, Dxy, Dyy
 			float tmp = dxx - dyy;
 			float tmp2 = sqrt(tmp * tmp + (4 * dxy * dxy));
 
@@ -146,81 +145,26 @@ tira::image<float> frangi_eig(tira::image<float> image_3) {
 			float lambda1 = (abs(mu1) < abs(mu2)) ? mu1 : mu2;
 			float lambda2 = (abs(mu1) < abs(mu2)) ? mu2 : mu1;
 
-			output(x, y, 0) = lambda1;
-			output(x, y, 1) = lambda2;
+			// check if no lambda2 is equal to 0, if yes, given the smallest value possible
+			if (lambda2 == 0)
+				lambda2 = nextafter(0, 1);
+
+			// Comute the first component of the vesselness equation
+			float Rb = lambda1 / lambda2;
+			float term1 = exp(-Rb * Rb / beta);
+			// Comute the second component of the vesselness equation
+			float S2 = (lambda1 * lambda1) + (lambda2 * lambda2);
+			float term2 = exp(-S2 / c);
+
+			if (lambda2 < 0)
+				output(x,y) = term1 * (1.0f - term2);
+			else
+				output(x,y) = 0.0f;
 		}
 	}
 
 	std::cout << "Eigenvalue decomposition done." << std::endl;
 	return output;
-}
-
-// Comute the first component of the vesselness equation
-tira::image<float> term1(tira::image<float> eigs, float beta) {
-
-	tira::image<float> tmp1(eigs.width(), eigs.height());
-
-	for (int i = 0; i < eigs.width(); i++) {
-		for (int j = 0; j < eigs.height(); j++) {
-			float lambda1 = eigs(i, j, 0);
-			float lambda2 = eigs(i, j, 1);
-
-			float Rb = lambda1 / lambda2;
-
-			tmp1(i, j) = exp(-Rb * Rb / beta);
-		}
-	}
-
-	return tmp1;
-}
-// Comute the second component of the vesselness equation
-tira::image<float> term2(tira::image<float> eigs, float c) {
-
-	tira::image<float> tmp2(eigs.width(), eigs.height());
-
-	for (int i = 0; i < eigs.width(); i++) {
-		for (int j = 0; j < eigs.height(); j++) {
-			float lambda1 = eigs(i, j, 0);
-			float lambda2 = eigs(i, j, 1);
-
-			float S2 = (lambda1 * lambda1) + (lambda2 * lambda2);
-
-			tmp2(i, j) = exp(-S2 / c);
-		}
-	}
-
-	return tmp2;
-}
-
-tira::image<float> filtered_img(tira::image<float> tmp1, tira::image<float> tmp2) {
-	
-	tira::image<float> output(tmp1.width(), tmp1.height());
-	//cv::Mat Ifiltered = tmp1.mul(cv::Mat::ones(src.rows, src.cols, src.type()) - tmp2);
-	for (int i = 0; i < tmp1.width(); i++) {
-		for (int j = 0; j < tmp1.height(); j++) {
-			output(i, j) = tmp1(i, j) * (1.0f - tmp2(i, j));
-		}
-	}
-	std::cout << "Vesselness function done." << std::endl;
-	return output;
-}
-
-// check if no lambda2 is equal to 0, if yes, given the smallest value possible
-void check_zero(tira::image<float>& eig_2) {
-
-	for (int i = 0; i < eig_2.width(); i++)
-		for (int j = 0; j < eig_2.height(); j++)
-			if (eig_2(i, j, 1) == 0)				
-				eig_2(i, j, 1) = nextafterf(0, 1);
-
-}
-
-void neg_lambda(tira::image<float>& img, tira::image<float> lambda2) {
-
-	for (int i = 0; i < img.width(); i++)
-		for (int j = 0; j < img.height(); j++)
-			if(lambda2(i, j) > 0)
-				img(i, j) = 0;
 }
 
 // Apply full Frangi filter to src.Vesselness is saved in J, scale is saved to scale, vessel angle is saved to directions.
@@ -242,20 +186,8 @@ tira::image<float> frangi(tira::image<float> src, float B, float C, float start,
 		//correct for scale - D * scale * scale
 		D = mult(mult(D, scale), scale);
 
-		//calculate (absolute value sorted) eigenvalues and vectors
-		tira::image<float> eig_2 = frangi_eig(D);
-		
-		// Check lambda2 > 0 and if equal to zero, make the smallest floating point value possible
-		check_zero(eig_2);
-		
-		// Create the two terms in the vesselness equation
-		tira::image<float> tmp1 = term1(eig_2, beta);
-		tira::image<float> tmp2 = term2(eig_2, c);
-
 		// Compute filtered image
-		tira::image<float> filtered1 = filtered_img(tmp1, tmp2);
-
-		neg_lambda(filtered1, eig_2.channel(1));
+		tira::image<float> filtered1 = frangi_eig(D, beta, c);
 
 		//store results
 		ALLfiltered.push_back(filtered1);
@@ -289,7 +221,7 @@ int main() {
 
     float beta = 1, c = 20, step = 0.5, start = 1, end = 3;
 
-    tira::image<float> loaded_image("brain.ppm");
+    tira::image<float> loaded_image("brain.bmp");
 	tira::image<float> img = loaded_image.channel(0);
 	tira::image<float> output_img = frangi(img, beta, c, start, end, step);
 	tira::colormap::cpu2image(output_img.data(), "result.bmp", output_img.width(), output_img.height(),
