@@ -1,6 +1,5 @@
 ## GPU-based Frangi Filter
 
-This code is written based on the efforts of "[NTNU IET Biomedical Optics](http://ntnu-bioopt.github.io/software/libfrangi.html)".<br>
 For loading/modifying images: [TIRA library](https://github.com/STIM-Lab).
 
 GPU code is added for acceleration.

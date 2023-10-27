@@ -18,19 +18,17 @@ void make_HKernels(float* kern_xx_f, float* kern_xy_f, float* kern_yy_f, float s
 	int n_kern_y = n_kern_x;
 
 	int i = 0, j = 0;
-	float scale_2 = scale * scale;
-	float scale_4 = scale_2 * scale_2;
-	float scale_6 = scale_2 * scale_4;
-	float half_PI_scale_4 = 1.0f / (2.0f * (float)PI * scale_4);
-	float half_PI_scale_6 = 1.0f / (2.0f * (float)PI * scale_6);
+	float s2 = scale * scale;
+	float s6 = s2 * s2 * s2;
+	float half_PI_s6 = 1.0f / (2.0f * (float)PI * s6);
 	float x2{};
 	for (int x = -half_kernel; x <= half_kernel; x++) {
 		j = 0;
 		x2 = x * x;
 		for (int y = -half_kernel; y <= half_kernel; y++) {
 			float y2 = y * y;
-			kern_xx_f[i * n_kern_y + j] = half_PI_scale_4 * (x2 / scale_2 - 1) * exp(-(x2 + y2) / (2.0f * scale_2));
-			kern_xy_f[i * n_kern_y + j] = half_PI_scale_6 * (x * y) * exp(-(x2 + y2) / (2.0f * scale_2));
+			kern_xx_f[i * n_kern_y + j] = half_PI_s6 * (x2 - s2) * exp(-(x2 + y2) / (2.0f * s2));
+			kern_xy_f[i * n_kern_y + j] = half_PI_s6 * (x * y) * exp(-(x2 + y2) / (2.0f * s2));
 			j++;
 		}
 		i++;
